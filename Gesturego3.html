@@ -1,0 +1,462 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Two-Hand Counting ASL Alphabet Recognizer</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      text-align: center;
+      background: #f7f7f7;
+      padding: 20px;
+      max-width: 800px;
+      margin: 0 auto;
+    }
+    canvas, video {
+      border: 2px solid #000;
+      border-radius: 10px;
+      margin-top: 20px;
+      max-width: 100%;
+    }
+    #output {
+      font-size: 2em;
+      margin-top: 20px;
+      color: #333;
+    }
+    .controls {
+      margin: 20px 0;
+      display: flex;
+      justify-content: center;
+      gap: 10px;
+    }
+    button {
+      padding: 10px 15px;
+      background: #4CAF50;
+      color: white;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+      font-size: 16px;
+    }
+    button:hover {
+      background: #45a049;
+    }
+    .history {
+      margin-top: 20px;
+      font-size: 1.5em;
+    }
+    .debug {
+      margin-top: 10px;
+      font-size: 0.8em;
+      color: #666;
+      text-align: left;
+      max-height: 120px;
+      overflow-y: auto;
+      padding: 10px;
+      background: #eee;
+      border-radius: 10px;
+      display: none;
+    }
+    .legend {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 10px;
+      margin: 20px auto;
+      max-width: 600px;
+      text-align: left;
+      background: #fff;
+      padding: 15px;
+      border-radius: 10px;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+    }
+    .legend h3 {
+      grid-column: span 2;
+      text-align: center;
+      margin-top: 0;
+    }
+    .legend-item {
+      display: flex;
+      align-items: center;
+      padding: 3px 0;
+    }
+    .hand-display {
+      display: flex;
+      justify-content: space-around;
+      margin-top: 15px;
+    }
+    .hand-container {
+      width: 45%;
+      text-align: center;
+    }
+    .hand-label {
+      font-weight: bold;
+      margin-bottom: 5px;
+    }
+  </style>
+</head>
+<body>
+  <h1>Two-Hand Counting ASL Alphabet Recognizer</h1>
+  <div class="controls">
+    <button id="startBtn">Start Camera</button>
+    <button id="debugBtn">Toggle Debug Info</button>
+    <button id="clearBtn">Clear Text</button>
+  </div>
+  
+  <div class="hand-display">
+    <div class="hand-container">
+      <div class="hand-label">Left Hand</div>
+      <div id="leftHandFingers">Waiting...</div>
+    </div>
+    <div class="hand-container">
+      <div class="hand-label">Right Hand</div>
+      <div id="rightHandFingers">Waiting...</div>
+    </div>
+  </div>
+  
+  <video id="video" width="640" height="480" autoplay muted></video>
+  <canvas id="canvas" width="640" height="480"></canvas>
+  
+  <div id="output">Waiting for hand gestures...</div>
+  <div class="debug" id="debugInfo"></div>
+  
+  <div class="history">
+    <p>Recognized Text: <span id="textOutput"></span><span id="cursor">|</span></p>
+  </div>
+
+  <div class="legend">
+    <h3>Two-Hand Counting System</h3>
+    <div class="legend-item">A: Right Index Only (1)</div>
+    <div class="legend-item">N: Left Index + Right (Index to Pinky + Thumb) (14)</div>
+    <div class="legend-item">B: Right Index + Middle (2)</div>
+    <div class="legend-item">O: Left Index + Right Thumb (15)</div>
+    <div class="legend-item">C: Right Index + Middle + Ring (3)</div>
+    <div class="legend-item">P: Left Index + Right (Thumb + Index) (16)</div>
+    <div class="legend-item">D: Right (Index to Pinky) (4)</div>
+    <div class="legend-item">Q: Left Index + Right (Thumb + Index + Middle) (17)</div>
+    <div class="legend-item">E: Right (Index to Pinky + Thumb) (5)</div>
+    <div class="legend-item">R: Left Index + Right (Thumb to Ring) (18)</div>
+    <div class="legend-item">F: Right Thumb Only (6)</div>
+    <div class="legend-item">S: Left Index + Right (Thumb to Pinky) (19)</div>
+    <div class="legend-item">G: Right Thumb + Index (7)</div>
+    <div class="legend-item">T: Left (Index + Middle) + Right Folded (20)</div>
+    <div class="legend-item">H: Right Thumb + Index + Middle (8)</div>
+    <div class="legend-item">U: Left (Index + Middle) + Right Index (21)</div>
+    <div class="legend-item">I: Right Thumb to Ring (9)</div>
+    <div class="legend-item">V: Left (Index + Middle) + Right (Index + Middle) (22)</div>
+    <div class="legend-item">J: Left Index + Right Folded (10)</div>
+    <div class="legend-item">W: Left (Index + Middle) + Right (Index to Ring) (23)</div>
+    <div class="legend-item">K: Left Index + Right Index (11)</div>
+    <div class="legend-item">X: Left (Index + Middle) + Right (Index to Pinky) (24)</div>
+    <div class="legend-item">L: Left Index + Right (Index + Middle) (12)</div>
+    <div class="legend-item">Y: Left (Index + Middle) + Right (All Fingers) (25)</div>
+    <div class="legend-item">M: Left Index + Right (Index to Ring) (13)</div>
+    <div class="legend-item">Z: Left (Index + Middle) + Right Thumb (26)</div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js"></script>
+
+  <script>
+    // DOM elements
+    const videoElement = document.getElementById('video');
+    const canvasElement = document.getElementById('canvas');
+    const canvasCtx = canvasElement.getContext('2d');
+    const output = document.getElementById('output');
+    const textOutput = document.getElementById('textOutput');
+    const debugInfo = document.getElementById('debugInfo');
+    const startBtn = document.getElementById('startBtn');
+    const debugBtn = document.getElementById('debugBtn');
+    const clearBtn = document.getElementById('clearBtn');
+    const cursor = document.getElementById('cursor');
+    const leftHandFingers = document.getElementById('leftHandFingers');
+    const rightHandFingers = document.getElementById('rightHandFingers');
+
+    // Global variables
+    let camera = null;
+    let hands = null;
+    let lastDetectedLetter = '';
+    let letterConfidence = 0;
+    let confidenceThreshold = 6; // Reduced threshold for easier detection
+    let recognizedText = '';
+    let isDebugMode = false;
+    let letterHoldDuration = 0;
+    let lastLetterAddedTime = 0;
+    
+    // Store the detected finger counts for both hands
+    let leftFingers = 0;
+    let rightFingers = 0;
+    let isLeftHandPresent = false;
+    let isRightHandPresent = false;
+    
+    // Map finger count to letters
+    const fingerCountToLetter = {
+      // Right hand only (1-9)
+      "0,1": "A", // Right index only
+      "0,2": "B", // Right index + middle
+      "0,3": "C", // Right index + middle + ring
+      "0,4": "D", // Right index to pinky
+      "0,5": "E", // Right all fingers
+      "0,6": "F", // Right thumb only
+      "0,7": "G", // Right thumb + index
+      "0,8": "H", // Right thumb + index + middle
+      "0,9": "I", // Right thumb to ring
+      
+      // Left index + Right hand (10-19)
+      "1,0": "J", // Left index + Right folded
+      "1,1": "K", // Left index + Right index
+      "1,2": "L", // Left index + Right (index + middle)
+      "1,3": "M", // Left index + Right (index to ring)
+      "1,4": "N", // Left index + Right (index to pinky)
+      "1,5": "O", // Left index + Right all fingers
+      "1,6": "P", // Left index + Right thumb
+      "1,7": "Q", // Left index + Right (thumb + index)
+      "1,8": "R", // Left index + Right (thumb + index + middle)
+      "1,9": "S", // Left index + Right (thumb to ring)
+      
+      // Left (index + middle) + Right hand (20-26)
+      "2,0": "T", // Left (index + middle) + Right folded
+      "2,1": "U", // Left (index + middle) + Right index
+      "2,2": "V", // Left (index + middle) + Right (index + middle)
+      "2,3": "W", // Left (index + middle) + Right (index to ring)
+      "2,4": "X", // Left (index + middle) + Right (index to pinky)
+      "2,5": "Y", // Left (index + middle) + Right all fingers
+      "2,6": "Z", // Left (index + middle) + Right thumb
+    };
+    
+    // Blink cursor effect
+    setInterval(() => {
+      cursor.style.visibility = cursor.style.visibility === 'hidden' ? 'visible' : 'hidden';
+    }, 500);
+
+    // Setup MediaPipe Hands
+    function setupHands() {
+      hands = new Hands({
+        locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
+      });
+
+      hands.setOptions({
+        maxNumHands: 2, // Set to 2 to detect both hands
+        modelComplexity: 1,
+        minDetectionConfidence: 0.7,
+        minTrackingConfidence: 0.7,
+      });
+
+      hands.onResults(onResults);
+    }
+
+    // Setup camera
+    function setupCamera() {
+      camera = new Camera(videoElement, {
+        onFrame: async () => {
+          if (hands) {
+            await hands.send({ image: videoElement });
+          }
+        },
+        width: 640,
+        height: 480,
+      });
+    }
+
+    // Start everything
+    startBtn.addEventListener('click', () => {
+      if (camera) {
+        // Already started, restart
+        startBtn.textContent = 'Starting...';
+        camera.stop().then(() => {
+          setupCamera();
+          camera.start().then(() => {
+            startBtn.textContent = 'Restart Camera';
+          });
+        });
+      } else {
+        startBtn.textContent = 'Starting...';
+        setupHands();
+        setupCamera();
+        camera.start().then(() => {
+          startBtn.textContent = 'Restart Camera';
+        });
+      }
+    });
+
+    // Toggle debug info
+    debugBtn.addEventListener('click', () => {
+      isDebugMode = !isDebugMode;
+      debugInfo.style.display = isDebugMode ? 'block' : 'none';
+    });
+
+    // Clear recognized text
+    clearBtn.addEventListener('click', () => {
+      recognizedText = '';
+      textOutput.textContent = '';
+    });
+
+    // Handle results from MediaPipe Hands
+    function onResults(results) {
+      canvasCtx.save();
+      canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
+      canvasCtx.drawImage(results.image, 0, 0, canvasElement.width, canvasElement.height);
+
+      // Reset hand presence flags
+      isLeftHandPresent = false;
+      isRightHandPresent = false;
+      
+      if (results.multiHandLandmarks) {
+        // Process each hand
+        for (let i = 0; i < results.multiHandLandmarks.length; i++) {
+          const landmarks = results.multiHandLandmarks[i];
+          const handedness = results.multiHandedness[i].label; // "Left" or "Right"
+          
+          // Note: MediaPipe returns "Left" when camera sees a right hand and vice versa
+          // So we need to invert the handedness for correct labeling
+          const actualHand = handedness === "Left" ? "Right" : "Left";
+          
+          // Draw hand connections and landmarks with different colors for each hand
+          const color = actualHand === "Right" ? "#00FF00" : "#FF6F00";
+          drawConnectors(canvasCtx, landmarks, HAND_CONNECTIONS, { color: color, lineWidth: 2 });
+          drawLandmarks(canvasCtx, landmarks, { color: "#FF0000", lineWidth: 1 });
+          
+          // Count extended fingers
+          const fingerCount = countExtendedFingers(landmarks);
+          
+          // Update finger counts based on which hand we're looking at
+          if (actualHand === "Left") {
+            leftFingers = fingerCount;
+            isLeftHandPresent = true;
+            leftHandFingers.textContent = `${fingerCount} finger(s)`;
+          } else {
+            rightFingers = fingerCount;
+            isRightHandPresent = true;
+            rightHandFingers.textContent = `${fingerCount} finger(s)`;
+          }
+        }
+        
+        // If hands are missing, update display
+        if (!isLeftHandPresent) {
+          leftHandFingers.textContent = "Not detected";
+          leftFingers = 0;
+        }
+        if (!isRightHandPresent) {
+          rightHandFingers.textContent = "Not detected";
+          rightFingers = 0;
+        }
+        
+        // Detect letter based on finger counts from both hands
+        const letterKey = `${leftFingers},${rightFingers}`;
+        const detectedLetter = fingerCountToLetter[letterKey] || '';
+        
+        // Debug information
+        if (isDebugMode) {
+          let debugText = `Left hand: ${isLeftHandPresent ? leftFingers + ' fingers' : 'not detected'}\n`;
+          debugText += `Right hand: ${isRightHandPresent ? rightFingers + ' fingers' : 'not detected'}\n`;
+          debugText += `Letter key: ${letterKey}\n`;
+          debugText += `Detected letter: ${detectedLetter}\n`;
+          debugText += `Confidence: ${letterConfidence}/${confidenceThreshold}`;
+          
+          debugInfo.textContent = debugText;
+        }
+
+        // Letter confidence tracking
+        if (detectedLetter === lastDetectedLetter && detectedLetter !== '') {
+          letterConfidence++;
+          letterHoldDuration++;
+          
+          // Only add letter when confidence threshold is reached and it's been at least 0.8 seconds since last letter
+          if (letterConfidence === confidenceThreshold) {
+            const now = Date.now();
+            if (recognizedText.length === 0 || now - lastLetterAddedTime > 800) {
+              recognizedText += detectedLetter;
+              textOutput.textContent = recognizedText;
+              lastLetterAddedTime = now;
+              
+              // Speak the letter
+              const utter = new SpeechSynthesisUtterance(detectedLetter);
+              speechSynthesis.cancel();
+              speechSynthesis.speak(utter);
+            }
+          }
+        } else {
+          lastDetectedLetter = detectedLetter;
+          letterConfidence = detectedLetter ? 1 : 0;
+          letterHoldDuration = 0;
+        }
+
+        // Update output display
+        if (detectedLetter) {
+          output.innerText = `Detected: ${detectedLetter}`;
+        } else if (isLeftHandPresent || isRightHandPresent) {
+          output.innerText = 'Gesture not recognized';
+        } else {
+          output.innerText = 'Waiting for hand gestures...';
+        }
+      } else {
+        // No hands detected
+        letterConfidence = 0;
+        lastDetectedLetter = '';
+        leftHandFingers.textContent = "Not detected";
+        rightHandFingers.textContent = "Not detected";
+        output.innerText = 'Waiting for hand gestures...';
+      }
+
+      canvasCtx.restore();
+    }
+
+    // Count the number of extended fingers in a hand
+    function countExtendedFingers(landmarks) {
+      // 1. Check each finger
+      // For the 4 main fingers: if tip y-position is higher than pip position, finger is extended
+      const isIndexExtended = landmarks[8].y < landmarks[6].y;
+      const isMiddleExtended = landmarks[12].y < landmarks[10].y;
+      const isRingExtended = landmarks[16].y < landmarks[14].y;
+      const isPinkyExtended = landmarks[20].y < landmarks[18].y;
+      
+      // 2. For thumb: special case since it moves sideways
+      // We check if the thumb tip is far from the index finger base
+      const thumbTip = landmarks[4];
+      const indexBase = landmarks[5];
+      const distance = Math.sqrt(
+        Math.pow(thumbTip.x - indexBase.x, 2) + 
+        Math.pow(thumbTip.y - indexBase.y, 2)
+      );
+      
+      // If distance is large enough, thumb is extended
+      const isThumbExtended = distance > 0.1;
+      
+      // Special case: Check if finger is forming a thumbs-up gesture
+      const wrist = landmarks[0];
+      const thumbsUp = isThumbExtended && 
+                      !isIndexExtended && 
+                      !isMiddleExtended && 
+                      !isRingExtended && 
+                      !isPinkyExtended && 
+                      thumbTip.y < wrist.y;
+      
+      // Count total extended fingers
+      let count = 0;
+      
+      // Standard finger counting
+      if (isIndexExtended) count++;
+      if (isMiddleExtended) count++;
+      if (isRingExtended) count++;
+      if (isPinkyExtended) count++;
+      
+      // For thumb, we have different counting modes
+      if (count === 0 && thumbsUp) {
+        // This is the case for "F" - just thumb
+        return 6;
+      } else if (isThumbExtended) {
+        if (count === 0) {
+          // Just thumb
+          return 6;
+        } else {
+          // Thumb + other fingers
+          return count + 5;
+        }
+      }
+      
+      return count;
+    }
+  </script>
+</body>
+</html>
